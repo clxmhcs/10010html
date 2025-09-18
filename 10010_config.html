@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>联通流量包配置 (自动加载)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    h2 { color: #007aff; }
+    .group { margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; border-radius: 6px; }
+    .group h3 { margin: 0 0 10px 0; }
+    label { display: block; }
+    textarea { width: 100%; height: 120px; margin-top: 10px; }
+    button { margin: 6px; padding: 6px 14px; }
+  </style>
+</head>
+<body>
+  <h2>联通流量包分组配置</h2>
+  <p>勾选你要统计的套餐包，保存后脚本会自动分类计算剩余。支持添加自定义分组。</p>
+
+  <div id="groups"></div>
+
+  <button onclick="addGroup()">➕ 新建分组</button>
+  <h3>生成的 JSON</h3>
+  <textarea id="output"></textarea><br>
+  <button onclick="generate()">生成 JSON</button>
+  <button onclick="saveConfig()">保存到 BoxJS</button>
+
+  <script>
+    let ALL_PACKAGES = [];
+    let EXISTING_CONFIG = {};
+
+    const groupsDiv = document.getElementById('groups');
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/storage');
+        const data = await res.json();
+
+        const pkgsRaw = data['@ChinaUnicom.10010v4.pkgs'];
+        const configRaw = data['@ChinaUnicom.10010v4.config'];
+
+        if (pkgsRaw) {
+          const parsedPkgs = JSON.parse(pkgsRaw);
+          // 提取所有套餐包名（标题）
+          ALL_PACKAGES = parsedPkgs.map(p => p.title || p.name).filter(Boolean);
+        }
+
+        if (configRaw) {
+          EXISTING_CONFIG = JSON.parse(configRaw);
+        }
+
+        // 渲染已有分组
+        const groupNames = Object.keys(EXISTING_CONFIG);
+        if (groupNames.length > 0) {
+          groupNames.forEach(name => addGroup(name, EXISTING_CONFIG[name]));
+        } else {
+          ["国内余", "校园余", "小区余"].forEach(name => addGroup(name));
+        }
+      } catch (e) {
+        alert("❌ 无法从 BoxJS 获取数据，请确认页面已从 BoxJS 本地地址打开。
+错误详情: " + e);
+        ["国内余", "校园余", "小区余"].forEach(name => addGroup(name));
+      }
+    }
+
+    function addGroup(name = "新分组", selectedPkgs = []) {
+      const group = document.createElement('div');
+      group.className = "group";
+
+      const title = document.createElement('input');
+      title.type = "text";
+      title.value = name;
+      title.style = "font-weight:bold; font-size:14px; margin-bottom:6px; width:150px;";
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = "删除分组";
+      removeBtn.onclick = () => group.remove();
+
+      group.appendChild(title);
+      group.appendChild(removeBtn);
+
+      ALL_PACKAGES.forEach(pkg => {
+        const label = document.createElement('label');
+        const checked = selectedPkgs.includes(pkg) ? "checked" : "";
+        label.innerHTML = `<input type="checkbox" value="${pkg}" ${checked}> ${pkg}`;
+        group.appendChild(label);
+      });
+
+      groupsDiv.appendChild(group);
+    }
+
+    function generate() {
+      const groups = document.querySelectorAll('.group');
+      let config = {};
+      groups.forEach(g => {
+        const title = g.querySelector('input[type=text]').value.trim();
+        const checked = Array.from(g.querySelectorAll('input:checked')).map(i => i.value);
+        if (title) config[title] = checked;
+      });
+      document.getElementById('output').value = JSON.stringify(config, null, 2);
+    }
+
+    function saveConfig() {
+      const json = document.getElementById('output').value;
+      if (!json) { alert("请先生成 JSON"); return; }
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: '@ChinaUnicom.10010v4.config',
+          val: json
+        })
+      }).then(res => {
+        if (res.ok) {
+          alert("✅ 保存成功！");
+        } else {
+          alert("❌ 保存失败！");
+        }
+      });
+    }
+
+    // 初始化
+    loadData();
+  </script>
+</body>
+</html>
