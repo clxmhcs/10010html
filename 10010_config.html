@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>联通余量(v4) 配置页</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+  h2 { margin-bottom: 10px; }
+  .selectors { margin-bottom: 15px; }
+  .selectors label { margin-right: 15px; font-weight: bold; }
+  .pkg-item { margin: 5px 0; }
+  .btns { margin-top: 20px; text-align: center; }
+  button { margin: 5px; padding: 8px 18px; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; }
+  .save { background: #4CAF50; color: white; }
+  .refresh { background: #2196F3; color: white; }
+  #debug { margin-top: 30px; font-size: 12px; color: #555; white-space: pre-wrap; word-break: break-all; background: #eee; padding: 10px; border-radius: 6px; }
+</style>
+<script>
+  // BoxJS API 封装
+  async function getValue(key) {
+    if (window.$boxjs) return await window.$boxjs.getValue(key);
+    return localStorage.getItem(key) || "";
+  }
+  async function setValue(key, value) {
+    if (window.$boxjs) return await window.$boxjs.setValue(value, key);
+    localStorage.setItem(key, value);
+  }
+
+  let pkgs = [];   // 所有流量包
+
+  async function loadPage() {
+    // 获取 pkgs
+    const pkgsStr = await getValue("@ChinaUnicom.10010v4.pkgs");
+    try { pkgs = JSON.parse(pkgsStr || "[]"); } catch(e){ pkgs = []; }
+
+    render();
+
+    // 显示调试信息
+    document.getElementById("debug").textContent = 
+      "当前 pkgs 原始 JSON：\n" + (pkgsStr || "(空)");
+  }
+
+  function render() {
+    const listDiv = document.getElementById("pkg-list");
+    listDiv.innerHTML = "";
+
+    // 集合选择器
+    const selectors = document.createElement("div");
+    selectors.className = "selectors";
+    selectors.innerHTML = `
+      <label><input type="checkbox" id="chk-domestic" onchange="applyGroup('国内')"> 国内流量</label>
+      <label><input type="checkbox" id="chk-province" onchange="applyGroup('省内')"> 省内流量</label>
+      <label><input type="checkbox" id="chk-xiaoqu" onchange="applyGroup('小区')"> 小区流量</label>
+    `;
+    listDiv.appendChild(selectors);
+
+    // 包列表
+    pkgs.forEach(p=>{
+      const div = document.createElement("div");
+      div.className = "pkg-item";
+      div.innerHTML = `<label><input type="checkbox" data-pkg="${p.name}" value="${p.name}"> ${p.name} (${p.remain||"?"}/${p.total||"?"})</label>`;
+      listDiv.appendChild(div);
+    });
+  }
+
+  function applyGroup(keyword){
+    const checked = document.getElementById("chk-"+(
+      keyword==="国内" ? "domestic" : keyword==="省内" ? "province" : "xiaoqu"
+    )).checked;
+
+    document.querySelectorAll("#pkg-list input[data-pkg]").forEach(i=>{
+      if(i.value.includes(keyword)){
+        i.checked = checked;
+      }
+    });
+  }
+
+  async function saveConfig(){
+    const result = {domestic:[], province:[], custom:{"小区流量":[]}};
+    document.querySelectorAll("#pkg-list input[data-pkg]:checked").forEach(i=>{
+      if(i.value.includes("国内")) result.domestic.push(i.value);
+      else if(i.value.includes("省内")) result.province.push(i.value);
+      else if(i.value.includes("小区")) result.custom["小区流量"].push(i.value);
+    });
+    await setValue("@ChinaUnicom.10010v4.config", JSON.stringify(result));
+    alert("保存成功！");
+  }
+</script>
+</head>
+<body onload="loadPage()">
+  <h2>联通余量(v4) 流量包选择</h2>
+  <div id="pkg-list"></div>
+
+  <div class="btns">
+    <button class="save" onclick="saveConfig()">保存</button>
+    <button class="refresh" onclick="loadPage()">刷新</button>
+  </div>
+
+  <div id="debug"></div>
+</body>
+</html>
