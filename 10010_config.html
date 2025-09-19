@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>联通余量(v4) 配置页</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+  h2 { margin-bottom: 10px; }
+  h3 { margin: 15px 0 8px; border-left: 4px solid #2196F3; padding-left: 6px; }
+  .group { border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 15px; background: #fff; }
+  .pkg-item { margin: 5px 0; }
+  .btns { margin-top: 20px; text-align: center; }
+  button { margin: 5px; padding: 8px 18px; font-size: 15px; border: none; border-radius: 6px; cursor: pointer; }
+  .save { background: #4CAF50; color: white; }
+  .refresh { background: #2196F3; color: white; }
+  .add { background: #FF9800; color: white; }
+  .delete { background: #E91E63; color: white; float: right; font-size: 12px; padding: 3px 8px; }
+</style>
+<script>
+  // BoxJS API 封装
+  async function getValue(key) {
+    if (window.$boxjs) return await window.$boxjs.getValue(key);
+    return localStorage.getItem(key) || "";
+  }
+  async function setValue(key, value) {
+    if (window.$boxjs) return await window.$boxjs.setValue(value, key);
+    localStorage.setItem(key, value);
+  }
+
+  let pkgs = [];   // 所有流量包
+  let config = {}; // 当前配置
+
+  async function loadPage() {
+    // 获取 pkgs
+    const pkgsStr = await getValue("@ChinaUnicom.10010v4.pkgs");
+    try { pkgs = JSON.parse(pkgsStr || "[]"); } catch(e){ pkgs = []; }
+
+    // 获取 config
+    const configStr = await getValue("@ChinaUnicom.10010v4.config");
+    try { config = JSON.parse(configStr || "{}"); } catch(e){ config = {}; }
+
+    render();
+  }
+
+  function render() {
+    const listDiv = document.getElementById("pkg-list");
+    listDiv.innerHTML = "";
+
+    // 固定项
+    renderGroup("国内流量", "domestic", config.domestic || []);
+    renderGroup("省内流量", "province", config.province || []);
+
+    // 自定义项
+    const custom = config.custom || {};
+    Object.keys(custom).forEach(name=>{
+      renderGroup(name, "custom:"+name, custom[name], true);
+    });
+  }
+
+  function renderGroup(title, key, selected, deletable=false){
+    const listDiv = document.getElementById("pkg-list");
+    const group = document.createElement("div");
+    group.className = "group";
+    let header = `<h3>${title}`;
+    if(deletable){
+      header += `<button class="delete" onclick="deleteGroup('${key}')">删除</button>`;
+    }
+    header += `</h3>`;
+    group.innerHTML = header;
+
+    pkgs.forEach(p=>{
+      const div = document.createElement("div");
+      div.className = "pkg-item";
+      div.innerHTML = `<label><input type="checkbox" data-group="${key}" value="${p.name}" ${selected.includes(p.name)?"checked":""}> ${p.name} (${p.remain||"?"}/${p.total||"?"})</label>`;
+      group.appendChild(div);
+    });
+
+    listDiv.appendChild(group);
+  }
+
+  async function saveConfig(){
+    const checked = {domestic:[], province:[], custom:{}};
+
+    document.querySelectorAll("#pkg-list input:checked").forEach(i=>{
+      const g = i.dataset.group;
+      if(g==="domestic") checked.domestic.push(i.value);
+      else if(g==="province") checked.province.push(i.value);
+      else if(g.startsWith("custom:")){
+        const name = g.split(":")[1];
+        if(!checked.custom[name]) checked.custom[name]=[];
+        checked.custom[name].push(i.value);
+      }
+    });
+
+    await setValue("@ChinaUnicom.10010v4.config", JSON.stringify(checked));
+    alert("保存成功！");
+  }
+
+  function addGroup(){
+    const name = prompt("请输入新集合名称");
+    if(name){
+      if(!config.custom) config.custom = {};
+      config.custom[name] = [];
+      render();
+    }
+  }
+
+  function deleteGroup(key){
+    const name = key.split(":")[1];
+    if(confirm("确定要删除集合「"+name+"」吗？")){
+      delete config.custom[name];
+      render();
+    }
+  }
+</script>
+</head>
+<body onload="loadPage()">
+  <h2>联通余量(v4) 流量包选择</h2>
+  <div id="pkg-list"></div>
+
+  <div class="btns">
+    <button class="save" onclick="saveConfig()">保存</button>
+    <button class="refresh" onclick="loadPage()">刷新</button>
+    <button class="add" onclick="addGroup()">+ 新建集合</button>
+  </div>
+</body>
+</html>
