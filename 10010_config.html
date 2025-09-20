@@ -1,0 +1,34 @@
+<script>
+(async () => {
+  if (!window.$boxjs) {
+    alert("❌ 没有注入 $boxjs");
+    return;
+  }
+
+  const raw = await $boxjs.getValue('@ChinaUnicom.10010v4.pkgs');
+
+  if (!raw) {
+    alert("⚠️ 没有获取到任何流量包数据！");
+    return;
+  }
+
+  try {
+    const pkgs = JSON.parse(raw);
+    if (!Array.isArray(pkgs)) {
+      throw new Error("解析失败：不是数组");
+    }
+
+    // 显示在页面上
+    const ul = document.createElement('ul');
+    pkgs.forEach(pkg => {
+      const li = document.createElement('li');
+      li.innerText = `${pkg.id || '-'} : ${pkg.name}`;
+      ul.appendChild(li);
+    });
+    document.body.appendChild(ul);
+
+  } catch (e) {
+    alert("❌ 数据解析失败，原始值为：" + raw);
+  }
+})();
+</script>
